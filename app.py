@@ -17,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 import gradio as gr
+from groq import Groq
 
 APP_NAME = "Socio360"
 DB_PATH = Path("socio360.db")
@@ -131,63 +132,67 @@ def seed_demo_data():
 # -----------------------------
 # AI assistant
 # -----------------------------
+def get_groq_client():
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return None
+    return Groq(api_key=api_key)
+
+
 def ai_assistant(question: str) -> str:
-    q = (question or "").strip().lower()
-    residents = int(query_df("SELECT COUNT(*) AS n FROM residents").iloc[0]["n"])
-    open_complaints = int(query_df(
-        "SELECT COUNT(*) AS n FROM complaints WHERE status != 'Closed'"
-    ).iloc[0]["n"])
-    events = int(query_df("SELECT COUNT(*) AS n FROM events").iloc[0]["n"])
+    question = (question or "").strip()
+    if not question:
+        return "Please enter a question."
 
-    if not q:
-        return "Ask me about residents, complaints, events, announcements, or society operations."
-
-    if any(word in q for word in ["complaint", "complaints", "issue", "issues"]):
-        data = query_df("""
-            SELECT category, priority, status, description
-            FROM complaints
-            WHERE status != 'Closed'
-            ORDER BY CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END
-        """)
-        if data.empty:
-            return "There are currently no open complaints."
-        lines = [f"Open complaints: {len(data)}"]
-        for _, row in data.head(5).iterrows():
-            lines.append(
-                f"- {row['priority']} priority / {row['category']} / {row['status']}: {row['description']}"
-            )
-        return "\n".join(lines)
-
-    if any(word in q for word in ["resident", "residents", "member", "members"]):
+    client = get_groq_client()
+    if client is None:
         return (
-            f"Socio360 currently has {residents} registered residents. "
-            "Use the Residents section to add or manage resident records."
+            "Groq API key is not configured. In Google Colab, set GROQ_API_KEY "
+            "as an environment variable. For Streamlit, add GROQ_API_KEY to "
+            "Streamlit Secrets. Never put the key in app.py or GitHub."
         )
 
-    if any(word in q for word in ["event", "events", "meeting"]):
-        return f"There are {events} events recorded. Check the Events section for dates and locations."
+    residents = query_df("SELECT name, house, status FROM residents ORDER BY id DESC LIMIT 100")
+    complaints = query_df("SELECT resident, category, description, priority, status FROM complaints ORDER BY id DESC LIMIT 100")
+    announcements = query_df("SELECT title, message, created_at FROM announcements ORDER BY id DESC LIMIT 20")
+    events = query_df("SELECT title, event_date, location, description FROM events ORDER BY event_date LIMIT 20")
 
-    if any(word in q for word in ["announcement", "news", "notice"]):
-        latest = query_df(
-            "SELECT title, message FROM announcements ORDER BY id DESC LIMIT 3"
-        )
-        if latest.empty:
-            return "There are no announcements yet."
-        return "\n".join(
-            [f"- {r['title']}: {r['message']}" for _, r in latest.iterrows()]
-        )
+    context = f"""Socio360 database context:
 
-    if any(word in q for word in ["summary", "dashboard", "status", "report"]):
-        return (
-            f"Society summary: {residents} residents, {open_complaints} open complaints, "
-            f"and {events} events. Prioritize high-priority complaints and keep residents "
-            "updated through announcements."
-        )
+Residents:
+{residents.to_string(index=False)}
 
-    return (
-        "I can help with residents, complaints, events, announcements, and basic society "
-        "management recommendations. Try: 'Give me a society summary' or 'Show open complaints'."
+Complaints:
+{complaints.to_string(index=False)}
+
+Announcements:
+{announcements.to_string(index=False)}
+
+Events:
+{events.to_string(index=False)}
+"""
+
+    system_prompt = (
+        "You are Socio360 AI, an assistant for residential society management. "
+        "Use the supplied database context for data questions and do not invent "
+        "records or statistics. Help summarize society status, prioritize complaints, "
+        "prepare announcements, discuss events, and suggest practical administrative "
+        "actions. Be concise and professional."
     )
+
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": context + "\nUser question:\n" + question},
+            ],
+            temperature=0.3,
+            max_completion_tokens=800,
+        )
+        return completion.choices[0].message.content
+    except Exception as exc:
+        return f"Groq API error: {exc}"
 
 
 # -----------------------------
