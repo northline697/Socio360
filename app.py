@@ -4,8 +4,7 @@ Single codebase:
 - Google Colab development: `python app.py` -> Gradio UI
 - Streamlit deployment: `streamlit run app.py` -> Streamlit UI
 
-This MVP uses SQLite for local data storage and a built-in AI-style assistant
-(no API key is required). An external LLM can be added later.
+This MVP uses SQLite for local data storage and the Groq API for AI assistance.
 """
 
 import os
@@ -16,7 +15,6 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-import gradio as gr
 from groq import Groq
 
 APP_NAME = "Socio360"
@@ -133,7 +131,15 @@ def seed_demo_data():
 # AI assistant
 # -----------------------------
 def get_groq_client():
-    api_key = os.getenv("GROQ_API_KEY")
+    # Streamlit Cloud: use st.secrets.
+    # Colab/local: use the GROQ_API_KEY environment variable.
+    api_key = None
+    try:
+        api_key = st.secrets.get("GROQ_API_KEY")
+    except Exception:
+        pass
+
+    api_key = api_key or os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
     return Groq(api_key=api_key)
@@ -182,7 +188,7 @@ Events:
 
     try:
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": context + "\nUser question:\n" + question},
@@ -245,6 +251,8 @@ def add_event(title, event_date, location, description):
 # Gradio UI for Colab development
 # -----------------------------
 def build_gradio():
+    import gradio as gr
+
     with gr.Blocks(title=APP_NAME, theme=gr.themes.Soft()) as demo:
         gr.Markdown(
             "# 🏘️ Socio360\n"
@@ -471,7 +479,15 @@ seed_demo_data()
 
 # Streamlit executes the file through its own runtime.
 # Normal `python app.py` launches Gradio for Colab development.
-if "streamlit" in " ".join(sys.argv).lower() or os.getenv("STREAMLIT_RUNTIME"):
+def running_under_streamlit():
+    try:
+        from streamlit.runtime import exists
+        return exists()
+    except Exception:
+        return False
+
+
+if running_under_streamlit():
     streamlit_app()
 else:
     build_gradio().launch(share=True)
