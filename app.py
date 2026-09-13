@@ -341,7 +341,7 @@ def build_gradio():
             eb.click(add_event, [et, ed, el, ex], esm)
 
         with gr.Tab("AI Assistant"):
-            gr.Markdown("Ask the built-in assistant about society operations.")
+            gr.Markdown("Ask Socio360 AI about society operations. Responses are powered by Groq.")
             aq = gr.Textbox(label="Your question", placeholder="Give me a society summary")
             ar = gr.Textbox(label="AI Assistant", lines=8)
             gr.Button("Ask Socio360 AI").click(ai_assistant, aq, ar)
@@ -460,8 +460,8 @@ def streamlit_app():
     elif page == "AI Assistant":
         st.subheader("🤖 Socio360 AI Assistant")
         st.info(
-            "This MVP uses a built-in assistant, so it works without an API key. "
-            "It can be upgraded later with a hosted LLM."
+            "This assistant is powered by the Groq API. "
+            "Configure GROQ_API_KEY in Streamlit Secrets to use it."
         )
         question = st.text_area(
             "Ask a question",
