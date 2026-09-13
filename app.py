@@ -15,7 +15,10 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-from groq import Groq
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
 
 APP_NAME = "Socio360"
 DB_PATH = Path("socio360.db")
