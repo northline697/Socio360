@@ -4,7 +4,7 @@ Single codebase:
 - Google Colab development: `python app.py` -> Gradio UI
 - Streamlit deployment: `streamlit run app.py` -> Streamlit UI
 
-This MVP uses SQLite for local data storage and the Groq API for AI assistance.
+This MVP uses SQLite for local data storage and the Google Gemini API for AI assistance.
 """
 
 import os
@@ -15,10 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-try:
-    from groq import Groq
-except ImportError:
-    Groq = None
+from google import genai
 
 APP_NAME = "Socio360"
 DB_PATH = Path("socio360.db")
@@ -133,19 +130,19 @@ def seed_demo_data():
 # -----------------------------
 # AI assistant
 # -----------------------------
-def get_groq_client():
+def get_gemini_client():
     # Streamlit Cloud: use st.secrets.
-    # Colab/local: use the GROQ_API_KEY environment variable.
+    # Colab/local: use the GEMINI_API_KEY environment variable.
     api_key = None
     try:
-        api_key = st.secrets.get("GROQ_API_KEY")
+        api_key = st.secrets.get("GEMINI_API_KEY")
     except Exception:
         pass
 
-    api_key = api_key or os.getenv("GROQ_API_KEY")
+    api_key = api_key or os.getenv("GEMINI_API_KEY")
     if not api_key:
         return None
-    return Groq(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
 def ai_assistant(question: str) -> str:
@@ -153,11 +150,11 @@ def ai_assistant(question: str) -> str:
     if not question:
         return "Please enter a question."
 
-    client = get_groq_client()
+    client = get_gemini_client()
     if client is None:
         return (
-            "Groq API key is not configured. In Google Colab, set GROQ_API_KEY "
-            "as an environment variable. For Streamlit, add GROQ_API_KEY to "
+            "Google Gemini API key is not configured. In Google Colab, set GEMINI_API_KEY "
+            "as an environment variable. For Streamlit, add GEMINI_API_KEY to "
             "Streamlit Secrets. Never put the key in app.py or GitHub."
         )
 
@@ -190,18 +187,20 @@ Events:
     )
 
     try:
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": context + "\nUser question:\n" + question},
-            ],
-            temperature=0.3,
-            max_completion_tokens=800,
+        prompt = (
+            system_prompt
+            + "\n\nDatabase context:\n"
+            + context
+            + "\nUser question:\n"
+            + question
         )
-        return completion.choices[0].message.content
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+        )
+        return response.text or "Gemini returned an empty response."
     except Exception as exc:
-        return f"Groq API error: {exc}"
+        return f"Google Gemini API error: {exc}"
 
 
 # -----------------------------
@@ -344,7 +343,7 @@ def build_gradio():
             eb.click(add_event, [et, ed, el, ex], esm)
 
         with gr.Tab("AI Assistant"):
-            gr.Markdown("Ask Socio360 AI about society operations. Responses are powered by Groq.")
+            gr.Markdown("Ask the built-in assistant about society operations.")
             aq = gr.Textbox(label="Your question", placeholder="Give me a society summary")
             ar = gr.Textbox(label="AI Assistant", lines=8)
             gr.Button("Ask Socio360 AI").click(ai_assistant, aq, ar)
@@ -463,8 +462,8 @@ def streamlit_app():
     elif page == "AI Assistant":
         st.subheader("🤖 Socio360 AI Assistant")
         st.info(
-            "This assistant is powered by the Groq API. "
-            "Configure GROQ_API_KEY in Streamlit Secrets to use it."
+            "This MVP uses a built-in assistant, so it works without an API key. "
+            "It can be upgraded later with a hosted LLM."
         )
         question = st.text_area(
             "Ask a question",
