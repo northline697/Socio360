@@ -19,7 +19,7 @@ from google import genai
 
 APP_NAME = "Socio360"
 DB_PATH = Path("socio360.db")
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 
 # -----------------------------
