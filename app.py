@@ -19,6 +19,7 @@ from google import genai
 
 APP_NAME = "Socio360"
 DB_PATH = Path("socio360.db")
+GEMINI_MODEL = "gemini-2.5-flash"
 
 
 # -----------------------------
@@ -343,7 +344,7 @@ def build_gradio():
             eb.click(add_event, [et, ed, el, ex], esm)
 
         with gr.Tab("AI Assistant"):
-            gr.Markdown("Ask the built-in assistant about society operations.")
+            gr.Markdown("Ask the Google Gemini-powered AI Assistant about society operations.")
             aq = gr.Textbox(label="Your question", placeholder="Give me a society summary")
             ar = gr.Textbox(label="AI Assistant", lines=8)
             gr.Button("Ask Socio360 AI").click(ai_assistant, aq, ar)
@@ -462,8 +463,8 @@ def streamlit_app():
     elif page == "AI Assistant":
         st.subheader("🤖 Socio360 AI Assistant")
         st.info(
-            "This MVP uses a built-in assistant, so it works without an API key. "
-            "It can be upgraded later with a hosted LLM."
+            "This AI Assistant is powered by Google Gemini. "
+            "Add GEMINI_API_KEY to Streamlit Secrets to enable AI responses."
         )
         question = st.text_area(
             "Ask a question",
